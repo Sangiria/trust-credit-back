@@ -2,6 +2,7 @@ package database
 
 import (
 	"trust-credit-back/environment"
+	"trust-credit-back/models"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -23,6 +24,12 @@ func connectDB () *gorm.DB {
 	if err != nil {
 		panic("failed to connect to database")
 	}
+
+	_= db.AutoMigrate(
+		&models.User{},
+		&models.PhoneNumber{},
+		&models.AuthCredentials{},
+	)
 
 	db_connection = db
 

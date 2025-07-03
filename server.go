@@ -1,7 +1,6 @@
 package main
 
 import (
-	"trust-credit-back/database"
 	"trust-credit-back/routes"
 
 	"github.com/labstack/echo/v4"
@@ -10,9 +9,6 @@ import (
 func main() {
 	e := echo.New()
 
-	database.AutoMigrate()
-
-	routes.RegisterUserRoutes(e)
-
+	routes.InitUserRoutes(e)
 	e.Logger.Fatal(e.Start(":1323"))
 }
