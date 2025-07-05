@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"trust-credit-back/database"
@@ -12,7 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-type CreateUserRequest struct {
+type RegUserRequest struct {
 	AgentUserID uint   `json:"agent_user_id"`
 	FirstName   string `json:"first_name"`
 	LastName    string `json:"last_name"`
@@ -22,10 +21,24 @@ type CreateUserRequest struct {
 	Password	string `json:"password"`
 }
 
-func CreateUser(c echo.Context) error {
-	var req CreateUserRequest
+func RegUser (c echo.Context) error {
+	var (
+		auth_cred models.AuthCredentials
+		this_phone models.PhoneNumber
+		req RegUserRequest
+	)
+
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid request"})
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"message": "invalid request",
+		})
+	}
+
+	database.DB.Where("phone_number = ?", req.PhoneNumber).Find(&this_phone)
+	if this_phone.ID != 0 {
+		return c.JSON(http.StatusConflict, map[string]string{
+			"message": "user already exist",
+		})
 	}
 
 	user := models.User{
@@ -38,10 +51,11 @@ func CreateUser(c echo.Context) error {
 	}
 
 	if err := database.DB.Create(&user).Error; err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to create user"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"message": "failed to create user",
+		})
 	}
 
-	var auth_cred models.AuthCredentials
 
 	if req.Password == "" {
 		auth_cred = models.AuthCredentials{
@@ -51,21 +65,30 @@ func CreateUser(c echo.Context) error {
 		}
 
 		if err := database.DB.Create(&auth_cred).Error; err != nil {
-			return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to create user"})
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"message": "failed to create user",
+			})
 		}
 	} else {
-		salt_hash := strings.Split(service.GenerateHash(req.Password), "&")
+		hashed, err := service.GenerateHash(req.Password)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"message": "failed to create user",
+			})
+		}
 	
 		auth_cred = models.AuthCredentials{
 			AuthType: 	models.PhonePassword,
 			Login: 		req.PhoneNumber,
-			Salt:		salt_hash[0],
-			Hash:		salt_hash[1],
+			Salt:		hashed.Salt,
+			Hash:		hashed.Hash,
 			UserID: 	user.ID,
 		}
 	
 		if err := database.DB.Create(&auth_cred).Error; err != nil {
-			return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to create user"})
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"message": "failed to create user",
+			})
 		}
 	}
 
@@ -75,7 +98,9 @@ func CreateUser(c echo.Context) error {
 	}
 
 	if err := database.DB.Create(&phone).Error; err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to create phone number"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"message": "failed to create phone number",
+		})
 	}
 
 	database.DB.Model(&user).Association("PhoneNumbers").Append(&phone)
@@ -84,4 +109,23 @@ func CreateUser(c echo.Context) error {
 	database.DB.Preload("PhoneNumbers").Preload("AuthCredentials").Where("user_id = ?", user.ID).Find(&user)
 
 	return c.JSON(http.StatusOK, user)
+}
+
+func AuthUser (c echo.Context) error {
+	login, password := c.FormValue("login"), c.FormValue("password")
+
+	var auth_cred models.AuthCredentials
+
+	found := database.DB.Where("login = ? AND auth_type = ?", login, models.PhonePassword).Find(&auth_cred).RowsAffected > 0
+
+	if !found || !service.CompareHash(service.HashedPassword{Salt: auth_cred.Salt, Hash: auth_cred.Hash}, password) {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"message": "invalid credentials",
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "success",
+	})
+
 }
