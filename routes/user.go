@@ -7,5 +7,6 @@ import (
 )
 
 func InitUserRoutes(e *echo.Echo) {
-	e.POST("/users", handlers.CreateUser)
+	e.POST("/reg", handlers.RegUser)
+	e.GET("/auth", handlers.AuthUser)
 }
