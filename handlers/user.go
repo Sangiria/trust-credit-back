@@ -2,23 +2,39 @@ package handlers
 
 import (
 	"net/http"
+	"regexp"
 	"time"
 
 	"trust-credit-back/database"
 	"trust-credit-back/models"
 	"trust-credit-back/service"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 )
 
 type RegUserRequest struct {
-	AgentUserID uint   `json:"agent_user_id"`
-	FirstName   string `json:"first_name"`
-	LastName    string `json:"last_name"`
-	MiddleName  string `json:"middle_name"`
-	AccountType string `json:"account_type"`
-	PhoneNumber string `json:"phone_number"`
-	Password	string `json:"password"`
+	// AgentUserID uint   `json:"agent_user_id" validate:"required"` - убрала на время, пока поле не используется
+	FirstName   string `json:"first_name" validate:"required"`
+	LastName    string `json:"last_name" validate:"required"`
+	MiddleName  string `json:"middle_name" validate:"required"`
+	PhoneNumber string `json:"phone_number" validate:"phone"`
+	Password	string `json:"password" validate:"omitempty,password"`
+}
+
+func InitPhoneValidation(validate *validator.Validate) {
+	validate.RegisterValidation("phone", func(fl validator.FieldLevel) bool {
+        re := regexp.MustCompile(`^[78][0-9]{10}$`)
+        return re.MatchString(fl.Field().String())
+    })
+}
+
+//если пароль в итоге не нужен, то убрать
+func InitPasswordValidation(validate *validator.Validate) {
+	validate.RegisterValidation("password", func(fl validator.FieldLevel) bool {
+        re := regexp.MustCompile(`^(.{0,6}|[^0-9]*|[^A-Z]*|[^a-z]*|[a-zA-Z0-9]*)$`)
+        return !re.MatchString(fl.Field().String())
+    })
 }
 
 func RegUser (c echo.Context) error {
@@ -34,6 +50,17 @@ func RegUser (c echo.Context) error {
 		})
 	}
 
+	validate := validator.New()
+	InitPasswordValidation(validate)
+	InitPhoneValidation(validate)
+
+	err := validate.Struct(req)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"message": err.Error(),
+		})
+	}
+
 	database.DB.Where("phone_number = ?", req.PhoneNumber).Find(&this_phone)
 	if this_phone.ID != 0 {
 		return c.JSON(http.StatusConflict, map[string]string{
@@ -41,14 +68,17 @@ func RegUser (c echo.Context) error {
 		})
 	}
 
+
+
 	user := models.User{
-		AgentUserID: req.AgentUserID,
+		// AgentUserID: req.AgentUserID,
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
 		MiddleName:  req.MiddleName,
-		AccountType: req.AccountType,
+		AccountType: "user",
 		RegDate:     time.Now(),
 	}
+
 
 	if err := database.DB.Create(&user).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{

@@ -4,7 +4,7 @@ import "time"
 
 type User struct {
 	ID           	uint 				`gorm:"primaryKey"`
-	AgentUserID  	uint
+	// AgentUserID  	uint
 	FirstName    	string
 	LastName     	string
 	MiddleName   	string
