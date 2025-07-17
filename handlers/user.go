@@ -10,6 +10,7 @@ import (
 	"trust-credit-back/service"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
@@ -28,7 +29,6 @@ func InitPhoneValidation(validate *validator.Validate) {
     })
 }
 
-//если пароль в итоге не нужен, то убрать
 func InitPasswordValidation(validate *validator.Validate) {
 	validate.RegisterValidation("password", func(fl validator.FieldLevel) bool {
         re := regexp.MustCompile(`^(.{0,6}|[^0-9]*|[^A-Z]*|[^a-z]*|[a-zA-Z0-9]*)$`)
@@ -60,16 +60,15 @@ func RegUser (c echo.Context) error {
 		})
 	}
 
-	database.DB.Where("phone_number = ?", req.PhoneNumber).Find(&this_phone)
-	if this_phone.ID != 0 {
+	found := database.DB.Where("phone_number = ?", req.PhoneNumber).Find(&this_phone).RowsAffected > 0
+	if found {
 		return c.JSON(http.StatusConflict, map[string]string{
 			"message": "user already exist",
 		})
 	}
 
-
-
 	user := models.User{
+		ID: uuid.New().String(),
 		// AgentUserID: req.AgentUserID,
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
@@ -121,8 +120,9 @@ func RegUser (c echo.Context) error {
 	}
 
 	phone := models.PhoneNumber{
-		PhoneNumber: req.PhoneNumber,
-		UserID:      user.ID,
+		ID:				uuid.New().String(),
+		PhoneNumber: 	req.PhoneNumber,
+		UserID:      	user.ID,
 	}
 
 	if err := database.DB.Create(&phone).Error; err != nil {
@@ -136,7 +136,10 @@ func RegUser (c echo.Context) error {
 
 	database.DB.Preload("PhoneNumbers").Preload("AuthCredentials").Where("user_id = ?", user.ID).Find(&user)
 
-	return c.JSON(http.StatusOK, user)
+	return c.JSON(http.StatusOK, map[string]string{
+		"access_token": service.NewToken(user.ID, true),
+		"refresh_token": service.NewToken(user.ID, false),
+	})
 }
 
 func AuthUser (c echo.Context) error {
@@ -153,7 +156,10 @@ func AuthUser (c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{
-		"message": "success",
+		// "access_token": service.NewToken(user.ID, true),
+		// "refresh_token": service.NewToken(user.ID, false),
 	})
+
+	//исправить
 
 }

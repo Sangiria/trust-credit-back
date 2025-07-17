@@ -1,7 +1,7 @@
 package models
 
 type PhoneNumber struct {
-	ID          uint `gorm:"primaryKey"`
+	ID          string `gorm:"primaryKey"`
 	PhoneNumber string
-	UserID      uint
+	UserID      string
 }

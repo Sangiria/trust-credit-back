@@ -12,5 +12,5 @@ type AuthCredentials struct {
 	Login    	string		`gorm:"primaryKey"`
 	Hash	 	string
 	Salt     	string
-	UserID   	uint
+	UserID   	string
 }
