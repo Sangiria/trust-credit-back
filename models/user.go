@@ -9,11 +9,11 @@ const (
 )
 
 type User struct {
-	ID           	uint 				`gorm:"primaryKey"`
+	ID           	string 				`gorm:"primaryKey"`
 	//AgentUserID  	uint
 	FirstName    	string
 	LastName     	string
-	DateOfBirth     time.Time //как будет передаваться значение, как его валидировать и нужно ли вообще?
+	DateOfBirth     time.Time 			//как будет передаваться значение, как его валидировать и нужно ли вообще?
 	RegDate      	time.Time
 	AccountType  	AccountType
 	PhoneNumbers 	[]PhoneNumber 		`gorm:"foreignKey:UserID"`
