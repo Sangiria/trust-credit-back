@@ -17,7 +17,6 @@ type RegUserRequest struct {
 	// AgentUserID uint   `json:"agent_user_id" validate:"required"` - убрала на время, пока поле не используется
 	FirstName   string `json:"first_name" validate:"required"`
 	LastName    string `json:"last_name" validate:"required"`
-	MiddleName  string `json:"middle_name" validate:"required"`
 	PhoneNumber string `json:"phone_number" validate:"phone"`
 	Password	string `json:"password" validate:"omitempty,password"`
 }
@@ -74,8 +73,7 @@ func RegUser (c echo.Context) error {
 		// AgentUserID: req.AgentUserID,
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
-		MiddleName:  req.MiddleName,
-		AccountType: "user",
+		AccountType: models.UserType,
 		RegDate:     time.Now(),
 	}
 
