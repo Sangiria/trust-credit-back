@@ -8,5 +8,5 @@ import (
 
 func InitUserRoutes(e *echo.Echo) {
 	e.POST("/reg", handlers.RegUser)
-	e.GET("/auth", handlers.AuthUser)
+	e.POST("/auth", handlers.AuthUser)
 }
