@@ -6,6 +6,7 @@ import (
 	"trust-credit-back/environment"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 //надо ли отправлять возможные ошибки, произошедшие во время подписи токена, и регулировать их в ручках где происходит генерация jwt токенов?
@@ -45,35 +46,36 @@ func ParseToken(token string, secret string) (*jwt.Token, error) {
 	return parsed_token, err
 }
 
-func ValidateToken(token_string string, secret string) error {
+func ValidateToken(token_string string, secret string) (string, error) {
 	token, err := ParseToken(token_string, secret)
 	if err != nil || token == nil || !token.Valid {
-		return errors.New("token invalid")
+		return "", errors.New("token invalid")
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return errors.New("invalid token claims")
+		return "", errors.New("invalid token claims")
 	}
 
-	id, ok := claims["id"]
+	id, ok := claims["id"].(string)
+	_, err = uuid.Parse(id)
 	
 	if !ok {
-		return errors.New("invalid token claims")
+		return "", errors.New("invalid token claims")
+	}
+
+	if err != nil {
+		return "", errors.New("invalid format")
 	}
 	
-	if _, ok := id.(string); !ok {
-		return errors.New("invalid token claims")
-	}
-
 	exp, ok := claims["exp"].(float64)
 	if ok {
-		if int64(exp) < time.Now().Unix() {
-			return errors.New("token expired")
+		if time.Unix(int64(exp), 0).Before(time.Now()) {
+			return "", errors.New("token expired")
 		}
 	} else {
-		return errors.New("invalid or missing expiration time")
+		return "", errors.New("invalid or missing expiration time")
 	}
 
-	return nil
+	return id, nil
 }

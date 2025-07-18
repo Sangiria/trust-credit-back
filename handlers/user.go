@@ -14,10 +14,13 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+//TODO: рефактор валидации и ручек авторизации\регистрации
+
 type RegUserRequest struct {
 	// AgentUserID uint   `json:"agent_user_id" validate:"required"` - убрала на время, пока поле не используется
 	FirstName   string `json:"first_name" validate:"required"`
 	LastName    string `json:"last_name" validate:"required"`
+	DateOfBirth string `json:"date_of_birth" validate:"required,date"`
 	PhoneNumber string `json:"phone_number" validate:"phone"`
 	Password	string `json:"password" validate:"omitempty,password"`
 }
@@ -36,6 +39,13 @@ func InitPasswordValidation(validate *validator.Validate) {
     })
 }
 
+func InitBirthDateValidation(validate *validator.Validate) {
+	validate.RegisterValidation("date", func(fl validator.FieldLevel) bool {
+		_, err := service.ParseDateOfBirth(fl.Field().String())
+		return err == nil
+	})
+}
+
 func RegUser (c echo.Context) error {
 	var (
 		auth_cred models.AuthCredentials
@@ -52,6 +62,7 @@ func RegUser (c echo.Context) error {
 	validate := validator.New()
 	InitPasswordValidation(validate)
 	InitPhoneValidation(validate)
+	InitBirthDateValidation(validate)
 
 	err := validate.Struct(req)
 	if err != nil {
@@ -67,11 +78,14 @@ func RegUser (c echo.Context) error {
 		})
 	}
 
+	date, _:= service.ParseDateOfBirth(req.DateOfBirth)
+
 	user := models.User{
 		ID: uuid.New().String(),
 		// AgentUserID: req.AgentUserID,
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
+		DateOfBirth: date,
 		AccountType: models.UserType,
 		RegDate:     time.Now(),
 	}
@@ -82,7 +96,6 @@ func RegUser (c echo.Context) error {
 			"message": "failed to create user",
 		})
 	}
-
 
 	if req.Password == "" {
 		auth_cred = models.AuthCredentials{
@@ -143,6 +156,8 @@ func RegUser (c echo.Context) error {
 }
 
 func AuthUser (c echo.Context) error {
+	id, _ := c.Get("id").(string)
+
 	login, password := c.FormValue("login"), c.FormValue("password")
 
 	var auth_cred models.AuthCredentials
@@ -156,10 +171,7 @@ func AuthUser (c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{
-		// "access_token": service.NewToken(user.ID, true),
-		// "refresh_token": service.NewToken(user.ID, false),
+		"access_token": service.NewToken(id, true),
+		"refresh_token": service.NewToken(id, false),
 	})
-
-	//исправить
-
 }

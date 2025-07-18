@@ -28,13 +28,15 @@ func JWTMiddleware(secret string) echo.MiddlewareFunc {
 
 			token := header_parts[1]
 
-			err := service.ValidateToken(token, secret)
+			id, err := service.ValidateToken(token, secret)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 					"status":  1,
 					"message": err.Error(),
 				})
 			}
+
+			c.Set("id", id)
 
 			return next(c)
 		}
