@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"time"
@@ -164,27 +165,28 @@ func RegUser (c echo.Context) error {
 }
 
 func AuthUser (c echo.Context) error {
-	id, _ := c.Get("id").(string)
-
 	login, password := c.FormValue("login"), c.FormValue("password")
 
 	var auth_cred models.AuthCredentials
 
 	found := database.DB.Where("login = ? AND auth_type = ?", login, models.PhonePassword).Find(&auth_cred).RowsAffected > 0
-
+	
 	if !found || !service.CompareHash(service.HashedPassword{Salt: auth_cred.Salt, Hash: auth_cred.Hash}, password) {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"message": "invalid credentials",
 		})
 	}
 
-	tokens, err := service.NewTokens(id)
+	tokens, err := service.NewTokens(auth_cred.UserID)
 
 	if err != nil {
 		return c.JSON(http.StatusForbidden, map[string]interface{}{
 			"message": err,
 		})
 	}
+
+	fmt.Println("user.ID:", auth_cred.UserID)
+	fmt.Println("user.ID.String():", auth_cred.UserID)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"access_token": tokens.AccessToken,
