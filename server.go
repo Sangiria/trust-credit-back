@@ -16,7 +16,10 @@ func main() {
 	refresh := e.Group("/refresh", custommiddleware.JWTMiddleware(environment.GetVariable("REFRESH_SECRET")))
 
 	access.GET("/test", func(c echo.Context) error {
-		return c.String(http.StatusOK, "test has been successful.")
+		id, _ := c.Get("id").(string)
+		return c.JSON(http.StatusOK, map[string]string{
+			"ID": id,
+		})
 	})
 
 	routes.InitUserRoutes(e)
