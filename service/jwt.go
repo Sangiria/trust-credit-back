@@ -9,34 +9,37 @@ import (
 	"github.com/google/uuid"
 )
 
-//надо ли отправлять возможные ошибки, произошедшие во время подписи токена, и регулировать их в ручках где происходит генерация jwt токенов?
+type TokenPair struct {
+	AccessToken  string
+	RefreshToken string
+}
 
-func NewToken(id string, is_access bool) string {
-	var (
-		token_secret string
-		duration time.Duration
-	)
+var (
+	access_secret = environment.GetVariable("ACCESS_SECRET")
+	access_duration = time.Minute * 15
+	refresh_secret = environment.GetVariable("REFRESH_SECRET")
+	refresh_duration = time.Hour * 168
+)
 
-	if is_access {
-		token_secret = environment.GetVariable("ACCESS_SECRET")
-		duration = time.Minute * 15
-	} else {
-		token_secret = environment.GetVariable("REFRESH_SECRET")
-		duration = time.Hour * 168
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+func NewTokens(id string) (TokenPair, error) {
+	access_token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"id":  id,
-		"exp": time.Now().Add(duration).Unix(),
+		"exp": time.Now().Add(access_duration).Unix(),
 	})
 
-	signed_token, err :=  token.SignedString([]byte(token_secret))
+	refresh_token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  id,
+		"exp": time.Now().Add(refresh_duration).Unix(),
+	})
+
+	signed_access, err1 :=  access_token.SignedString([]byte(access_secret))
+	signed_refresh, err2 :=  refresh_token.SignedString([]byte(refresh_secret))
 	
-	if err != nil {
-		return ""
+	if err1 != nil || err2 != nil {
+		return TokenPair{}, errors.Join(err1, err2)
 	}
 
-	return signed_token
+	return TokenPair{AccessToken: signed_access, RefreshToken: signed_refresh}, nil
 }
 
 func ParseToken(token string, secret string) (*jwt.Token, error) {

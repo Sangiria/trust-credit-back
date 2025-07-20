@@ -149,9 +149,17 @@ func RegUser (c echo.Context) error {
 
 	database.DB.Preload("PhoneNumbers").Preload("AuthCredentials").Where("user_id = ?", user.ID).Find(&user)
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"access_token": service.NewToken(user.ID, true),
-		"refresh_token": service.NewToken(user.ID, false),
+	tokens, err := service.NewTokens(user.ID)
+
+	if err != nil {
+		return c.JSON(http.StatusForbidden, map[string]interface{}{
+			"message": err,
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"access_token": tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
 	})
 }
 
@@ -170,8 +178,16 @@ func AuthUser (c echo.Context) error {
 		})
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"access_token": service.NewToken(id, true),
-		"refresh_token": service.NewToken(id, false),
+	tokens, err := service.NewTokens(id)
+
+	if err != nil {
+		return c.JSON(http.StatusForbidden, map[string]interface{}{
+			"message": err,
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"access_token": tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
 	})
 }
