@@ -10,11 +10,16 @@ import (
 func RefreshTokens (c echo.Context) error {
 	id, _ := c.Get("id").(string)
 
- 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status": "0",
-		"tokens": map[string]string{
-			"access_token": service.NewToken(id, true),
-			"refresh_token": service.NewToken(id, false),
-		},
+ 	tokens, err := service.NewTokens(id)
+
+	if err != nil {
+		return c.JSON(http.StatusForbidden, map[string]interface{}{
+			"message": err,
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"access_token": tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
 	})
 }
