@@ -7,6 +7,6 @@ import (
 )
 
 func InitUserRoutes(e *echo.Echo) {
-	e.POST("/reg", handlers.RegUser)
+	e.POST("/reg/qr-code", handlers.SendFormInQR)
 	e.POST("/auth", handlers.AuthUser)
 }
