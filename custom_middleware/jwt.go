@@ -3,7 +3,8 @@ package custommiddleware
 import (
 	"net/http"
 	"strings"
-	"trust-credit-back/service"
+	"trust-credit-back/service/security"
+
 	"github.com/labstack/echo/v4"
 )
 
@@ -28,7 +29,7 @@ func JWTMiddleware(secret string) echo.MiddlewareFunc {
 
 			token := header_parts[1]
 
-			id, err := service.ValidateToken(token, secret)
+			id, err := security.ValidateToken(token, secret)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 					"status":  1,
