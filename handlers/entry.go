@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"time"
 
 	"trust-credit-back/database"
 	"trust-credit-back/models"
@@ -11,6 +12,7 @@ import (
 	"trust-credit-back/service/utils"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
@@ -70,76 +72,6 @@ func SendFormInQR(c echo.Context) error {
 		})
 	}
 
-	// date, _:= utils.ParseDateOfBirth(ref.DateOfBirth)
-
-	// user := models.User{
-	// 	ID: uuid.New().String(),
-	// 	// AgentUserID: req.AgentUserID,
-	// 	FirstName:   ref.FirstName,
-	// 	LastName:    ref.LastName,
-	// 	DateOfBirth: date,
-	// 	AccountType: models.UserType,
-	// 	RegDate:     time.Now(),
-	// }
-
-
-	// if err := database.DB.Create(&user).Error; err != nil {
-	// 	return c.JSON(http.StatusInternalServerError, map[string]string{
-	// 		"message": "failed to create user",
-	// 	})
-	// }
-
-	// if ref.Password == "" {
-	// 	auth_cred = models.AuthCredentials{
-	// 		AuthType: 	models.PhoneCode,
-	// 		Login: 		ref.PhoneNumber,
-	// 		UserID: 	user.ID,
-	// 	}
-
-	// 	if err := database.DB.Create(&auth_cred).Error; err != nil {
-	// 		return c.JSON(http.StatusInternalServerError, map[string]string{
-	// 			"message": "failed to create user",
-	// 		})
-	// 	}
-	// } else {
-	// 	hashed, err := security.GenerateHash(ref.Password)
-	// 	if err != nil {
-	// 		return c.JSON(http.StatusInternalServerError, map[string]string{
-	// 			"message": "failed to create user",
-	// 		})
-	// 	}
-	
-	// 	auth_cred = models.AuthCredentials{
-	// 		AuthType: 	models.PhonePassword,
-	// 		Login: 		ref.PhoneNumber,
-	// 		Salt:		hashed.Salt,
-	// 		Hash:		hashed.Hash,
-	// 		UserID: 	user.ID,
-	// 	}
-	
-	// 	if err := database.DB.Create(&auth_cred).Error; err != nil {
-	// 		return c.JSON(http.StatusInternalServerError, map[string]string{
-	// 			"message": "failed to create user",
-	// 		})
-	// 	}
-	// }
-
-	// phone := models.PhoneNumber{
-	// 	ID:				uuid.New().String(),
-	// 	PhoneNumber: 	ref.PhoneNumber,
-	// 	UserID:      	user.ID,
-	// }
-
-	// if err := database.DB.Create(&phone).Error; err != nil {
-	// 	return c.JSON(http.StatusInternalServerError, map[string]string{
-	// 		"message": "failed to create phone number",
-	// 	})
-	// }
-
-	// database.DB.Model(&user).Association("PhoneNumbers").Append(&phone)
-	// database.DB.Model(&user).Association("AuthCredentials").Append(&auth_cred)
-
-	// database.DB.Preload("PhoneNumbers").Preload("AuthCredentials").Where("user_id = ?", user.ID).Find(&user)
 	qr_code, err := security.GenerateQRCode(ref)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, map[string]interface{}{
@@ -148,6 +80,103 @@ func SendFormInQR(c echo.Context) error {
 	}
 
 	return c.Blob(http.StatusOK, "image/png", qr_code)
+}
+
+func RegUser(c echo.Context) error {
+	var (
+		ref models.RegForm
+		auth_cred models.AuthCredentials
+	)
+
+	if err := c.Bind(&ref); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"message": "invalid request",
+		})
+	}
+
+	date, _:= utils.ParseDateOfBirth(ref.DateOfBirth)
+
+	user := models.User{
+		ID: uuid.New().String(),
+		// AgentUserID: req.AgentUserID,
+		FirstName:   ref.FirstName,
+		LastName:    ref.LastName,
+		DateOfBirth: date,
+		AccountType: models.UserType,
+		RegDate:     time.Now(),
+	}
+
+
+	if err := database.DB.Create(&user).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"message": "failed to create user",
+		})
+	}
+
+	if ref.Password == "" {
+		auth_cred = models.AuthCredentials{
+			AuthType: 	models.PhoneCode,
+			Login: 		ref.PhoneNumber,
+			UserID: 	user.ID,
+		}
+
+		if err := database.DB.Create(&auth_cred).Error; err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"message": "failed to create user",
+			})
+		}
+	} else {
+		hashed, err := security.GenerateHash(ref.Password)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"message": "failed to create user",
+			})
+		}
+	
+		auth_cred = models.AuthCredentials{
+			AuthType: 	models.PhonePassword,
+			Login: 		ref.PhoneNumber,
+			Salt:		hashed.Salt,
+			Hash:		hashed.Hash,
+			UserID: 	user.ID,
+		}
+	
+		if err := database.DB.Create(&auth_cred).Error; err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"message": "failed to create user",
+			})
+		}
+	}
+
+	phone := models.PhoneNumber{
+		ID:				uuid.New().String(),
+		PhoneNumber: 	ref.PhoneNumber,
+		UserID:      	user.ID,
+	}
+
+	if err := database.DB.Create(&phone).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"message": "failed to create phone number",
+		})
+	}
+
+	database.DB.Model(&user).Association("PhoneNumbers").Append(&phone)
+	database.DB.Model(&user).Association("AuthCredentials").Append(&auth_cred)
+
+	database.DB.Preload("PhoneNumbers").Preload("AuthCredentials").Where("user_id = ?", user.ID).Find(&user)
+
+	tokens, err := security.NewTokens(user.ID)
+	if err != nil {
+		return c.JSON(http.StatusForbidden, map[string]interface{}{
+			"message": err,
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"access_token": tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
+	})
+
 }
 
 func AuthUser (c echo.Context) error {
