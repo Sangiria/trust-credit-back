@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"net/http"
-	"trust-credit-back/service"
+	"trust-credit-back/service/security"
 
 	"github.com/labstack/echo/v4"
 )
@@ -10,7 +10,7 @@ import (
 func RefreshTokens (c echo.Context) error {
 	id, _ := c.Get("id").(string)
 
- 	tokens, err := service.NewTokens(id)
+ 	tokens, err := security.NewTokens(id)
 
 	if err != nil {
 		return c.JSON(http.StatusForbidden, map[string]interface{}{

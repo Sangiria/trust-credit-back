@@ -8,7 +8,8 @@ import (
 
 	"trust-credit-back/database"
 	"trust-credit-back/models"
-	"trust-credit-back/service"
+	"trust-credit-back/service/security"
+	"trust-credit-back/service/utils"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -16,15 +17,7 @@ import (
 )
 
 //TODO: рефактор валидации и ручек авторизации\регистрации
-
-type RegUserRequest struct {
-	// AgentUserID uint   `json:"agent_user_id" validate:"required"` - убрала на время, пока поле не используется
-	FirstName   string `json:"first_name" validate:"required"`
-	LastName    string `json:"last_name" validate:"required"`
-	DateOfBirth string `json:"date_of_birth" validate:"required,date"`
-	PhoneNumber string `json:"phone_number" validate:"phone"`
-	Password	string `json:"password" validate:"omitempty,password"`
-}
+//TODO: ручка отправки ID фотографий и удаления фотографий
 
 func InitPhoneValidation(validate *validator.Validate) {
 	validate.RegisterValidation("phone", func(fl validator.FieldLevel) bool {
@@ -42,7 +35,7 @@ func InitPasswordValidation(validate *validator.Validate) {
 
 func InitBirthDateValidation(validate *validator.Validate) {
 	validate.RegisterValidation("date", func(fl validator.FieldLevel) bool {
-		_, err := service.ParseDateOfBirth(fl.Field().String())
+		_, err := utils.ParseDateOfBirth(fl.Field().String())
 		return err == nil
 	})
 }
@@ -51,10 +44,10 @@ func RegUser (c echo.Context) error {
 	var (
 		auth_cred models.AuthCredentials
 		this_phone models.PhoneNumber
-		req RegUserRequest
+		ref models.RegForm
 	)
 
-	if err := c.Bind(&req); err != nil {
+	if err := c.Bind(&ref); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"message": "invalid request",
 		})
@@ -65,27 +58,27 @@ func RegUser (c echo.Context) error {
 	InitPhoneValidation(validate)
 	InitBirthDateValidation(validate)
 
-	err := validate.Struct(req)
+	err := validate.Struct(ref)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"message": err.Error(),
 		})
 	}
 
-	found := database.DB.Where("phone_number = ?", req.PhoneNumber).Find(&this_phone).RowsAffected > 0
+	found := database.DB.Where("phone_number = ?", ref.PhoneNumber).Find(&this_phone).RowsAffected > 0
 	if found {
 		return c.JSON(http.StatusConflict, map[string]string{
 			"message": "user already exist",
 		})
 	}
 
-	date, _:= service.ParseDateOfBirth(req.DateOfBirth)
+	date, _:= utils.ParseDateOfBirth(ref.DateOfBirth)
 
 	user := models.User{
 		ID: uuid.New().String(),
 		// AgentUserID: req.AgentUserID,
-		FirstName:   req.FirstName,
-		LastName:    req.LastName,
+		FirstName:   ref.FirstName,
+		LastName:    ref.LastName,
 		DateOfBirth: date,
 		AccountType: models.UserType,
 		RegDate:     time.Now(),
@@ -98,10 +91,10 @@ func RegUser (c echo.Context) error {
 		})
 	}
 
-	if req.Password == "" {
+	if ref.Password == "" {
 		auth_cred = models.AuthCredentials{
 			AuthType: 	models.PhoneCode,
-			Login: 		req.PhoneNumber,
+			Login: 		ref.PhoneNumber,
 			UserID: 	user.ID,
 		}
 
@@ -111,7 +104,7 @@ func RegUser (c echo.Context) error {
 			})
 		}
 	} else {
-		hashed, err := service.GenerateHash(req.Password)
+		hashed, err := security.GenerateHash(ref.Password)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{
 				"message": "failed to create user",
@@ -120,7 +113,7 @@ func RegUser (c echo.Context) error {
 	
 		auth_cred = models.AuthCredentials{
 			AuthType: 	models.PhonePassword,
-			Login: 		req.PhoneNumber,
+			Login: 		ref.PhoneNumber,
 			Salt:		hashed.Salt,
 			Hash:		hashed.Hash,
 			UserID: 	user.ID,
@@ -135,7 +128,7 @@ func RegUser (c echo.Context) error {
 
 	phone := models.PhoneNumber{
 		ID:				uuid.New().String(),
-		PhoneNumber: 	req.PhoneNumber,
+		PhoneNumber: 	ref.PhoneNumber,
 		UserID:      	user.ID,
 	}
 
@@ -150,7 +143,7 @@ func RegUser (c echo.Context) error {
 
 	database.DB.Preload("PhoneNumbers").Preload("AuthCredentials").Where("user_id = ?", user.ID).Find(&user)
 
-	tokens, err := service.NewTokens(user.ID)
+	tokens, err := security.NewTokens(user.ID)
 
 	if err != nil {
 		return c.JSON(http.StatusForbidden, map[string]interface{}{
@@ -171,13 +164,13 @@ func AuthUser (c echo.Context) error {
 
 	found := database.DB.Where("login = ? AND auth_type = ?", login, models.PhonePassword).Find(&auth_cred).RowsAffected > 0
 	
-	if !found || !service.CompareHash(service.HashedPassword{Salt: auth_cred.Salt, Hash: auth_cred.Hash}, password) {
+	if !found || !security.CompareHash(security.HashedPassword{Salt: auth_cred.Salt, Hash: auth_cred.Hash}, password) {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"message": "invalid credentials",
 		})
 	}
 
-	tokens, err := service.NewTokens(auth_cred.UserID)
+	tokens, err := security.NewTokens(auth_cred.UserID)
 
 	if err != nil {
 		return c.JSON(http.StatusForbidden, map[string]interface{}{
