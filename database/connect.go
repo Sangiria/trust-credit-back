@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 )
 
-
 var db_connection *gorm.DB
 
 func GetDBConnection() *gorm.DB {
@@ -18,17 +17,18 @@ func GetDBConnection() *gorm.DB {
 	return db_connection
 }
 
-func connectDB () *gorm.DB {
+func connectDB() *gorm.DB {
 	db, err := gorm.Open(postgres.Open(environment.GetVariable("DATABASE_URL")), &gorm.Config{})
 
 	if err != nil {
 		panic("failed to connect to database")
 	}
 
-	_= db.AutoMigrate(
+	_ = db.AutoMigrate(
 		&models.User{},
 		&models.PhoneNumber{},
 		&models.AuthCredentials{},
+		&models.SMSCode{},
 	)
 
 	db_connection = db

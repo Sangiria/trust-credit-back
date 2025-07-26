@@ -1,7 +1,8 @@
 package models
 
 type PhoneNumber struct {
-	ID          string `gorm:"primaryKey"`
-	PhoneNumber string
-	UserID      string
+	ID             string `gorm:"primaryKey"`
+	PhoneNumber    string
+	UserID         string
+	TelegramChatID int64
 }

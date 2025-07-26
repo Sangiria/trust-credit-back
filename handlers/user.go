@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"regexp"
 	"time"
@@ -23,21 +24,21 @@ type RegUserRequest struct {
 	LastName    string `json:"last_name" validate:"required"`
 	DateOfBirth string `json:"date_of_birth" validate:"required,date"`
 	PhoneNumber string `json:"phone_number" validate:"phone"`
-	Password	string `json:"password" validate:"omitempty,password"`
+	Password    string `json:"password" validate:"omitempty,password"`
 }
 
 func InitPhoneValidation(validate *validator.Validate) {
 	validate.RegisterValidation("phone", func(fl validator.FieldLevel) bool {
-        re := regexp.MustCompile(`^[78][0-9]{10}$`)
-        return re.MatchString(fl.Field().String())
-    })
+		re := regexp.MustCompile(`^[78][0-9]{10}$`)
+		return re.MatchString(fl.Field().String())
+	})
 }
 
 func InitPasswordValidation(validate *validator.Validate) {
 	validate.RegisterValidation("password", func(fl validator.FieldLevel) bool {
-        re := regexp.MustCompile(`^(.{0,6}|[^0-9]*|[^A-Z]*|[^a-z]*|[a-zA-Z0-9]*)$`)
-        return !re.MatchString(fl.Field().String())
-    })
+		re := regexp.MustCompile(`^(.{0,6}|[^0-9]*|[^A-Z]*|[^a-z]*|[a-zA-Z0-9]*)$`)
+		return !re.MatchString(fl.Field().String())
+	})
 }
 
 func InitBirthDateValidation(validate *validator.Validate) {
@@ -47,11 +48,11 @@ func InitBirthDateValidation(validate *validator.Validate) {
 	})
 }
 
-func RegUser (c echo.Context) error {
+func RegUser(c echo.Context) error {
 	var (
-		auth_cred models.AuthCredentials
+		auth_cred  models.AuthCredentials
 		this_phone models.PhoneNumber
-		req RegUserRequest
+		req        RegUserRequest
 	)
 
 	if err := c.Bind(&req); err != nil {
@@ -79,7 +80,7 @@ func RegUser (c echo.Context) error {
 		})
 	}
 
-	date, _:= service.ParseDateOfBirth(req.DateOfBirth)
+	date, _ := service.ParseDateOfBirth(req.DateOfBirth)
 
 	user := models.User{
 		ID: uuid.New().String(),
@@ -91,7 +92,6 @@ func RegUser (c echo.Context) error {
 		RegDate:     time.Now(),
 	}
 
-
 	if err := database.DB.Create(&user).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"message": "failed to create user",
@@ -100,9 +100,9 @@ func RegUser (c echo.Context) error {
 
 	if req.Password == "" {
 		auth_cred = models.AuthCredentials{
-			AuthType: 	models.PhoneCode,
-			Login: 		req.PhoneNumber,
-			UserID: 	user.ID,
+			AuthType: models.PhoneCode,
+			Login:    req.PhoneNumber,
+			UserID:   user.ID,
 		}
 
 		if err := database.DB.Create(&auth_cred).Error; err != nil {
@@ -117,15 +117,15 @@ func RegUser (c echo.Context) error {
 				"message": "failed to create user",
 			})
 		}
-	
+
 		auth_cred = models.AuthCredentials{
-			AuthType: 	models.PhonePassword,
-			Login: 		req.PhoneNumber,
-			Salt:		hashed.Salt,
-			Hash:		hashed.Hash,
-			UserID: 	user.ID,
+			AuthType: models.PhonePassword,
+			Login:    req.PhoneNumber,
+			Salt:     hashed.Salt,
+			Hash:     hashed.Hash,
+			UserID:   user.ID,
 		}
-	
+
 		if err := database.DB.Create(&auth_cred).Error; err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{
 				"message": "failed to create user",
@@ -134,9 +134,9 @@ func RegUser (c echo.Context) error {
 	}
 
 	phone := models.PhoneNumber{
-		ID:				uuid.New().String(),
-		PhoneNumber: 	req.PhoneNumber,
-		UserID:      	user.ID,
+		ID:          uuid.New().String(),
+		PhoneNumber: req.PhoneNumber,
+		UserID:      user.ID,
 	}
 
 	if err := database.DB.Create(&phone).Error; err != nil {
@@ -159,18 +159,18 @@ func RegUser (c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"access_token": tokens.AccessToken,
+		"access_token":  tokens.AccessToken,
 		"refresh_token": tokens.RefreshToken,
 	})
 }
 
-func AuthUser (c echo.Context) error {
+func AuthUser(c echo.Context) error {
 	login, password := c.FormValue("login"), c.FormValue("password")
 
 	var auth_cred models.AuthCredentials
 
 	found := database.DB.Where("login = ? AND auth_type = ?", login, models.PhonePassword).Find(&auth_cred).RowsAffected > 0
-	
+
 	if !found || !service.CompareHash(service.HashedPassword{Salt: auth_cred.Salt, Hash: auth_cred.Hash}, password) {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"message": "invalid credentials",
@@ -189,7 +189,93 @@ func AuthUser (c echo.Context) error {
 	fmt.Println("user.ID.String():", auth_cred.UserID)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"access_token": tokens.AccessToken,
+		"access_token":  tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
+	})
+}
+
+type RequestCodeInput struct {
+	Phone string `json:"phone_number" validate:"required"`
+}
+
+func RequestCode(c echo.Context) error {
+	var input RequestCodeInput
+	if err := c.Bind(&input); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid input"})
+	}
+
+	validate := validator.New()
+	InitPhoneValidation(validate)
+	if err := validate.Struct(input); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+	}
+
+	var phone models.PhoneNumber
+	if err := database.DB.Where("phone_number = ?", input.Phone).First(&phone).Error; err != nil {
+		return c.JSON(http.StatusNotFound, echo.Map{"error": "phone not found"})
+	}
+
+	code := fmt.Sprintf("%05d", rand.Intn(100000))
+
+	sms := models.SMSCode{
+		ID:        uuid.New().String(),
+		UserID:    phone.UserID,
+		Code:      code,
+		CreatedAt: time.Now(),
+		ExpiredAt: time.Now().Add(5 * time.Minute),
+		IsUsed:    false,
+	}
+	if err := database.DB.Create(&sms).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "DB insert error"})
+	}
+
+	if err := service.SendCodeToUserOrChannel(phone.TelegramChatID, code); err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "telegram error"})
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{"status": "code sent"})
+}
+
+type VerifyCodeInput struct {
+	Phone string `json:"phone_number" validate:"required"`
+	Code  string `json:"code" validate:"required,len=5"`
+}
+
+func VerifyCode(c echo.Context) error {
+	var input VerifyCodeInput
+	if err := c.Bind(&input); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid input"})
+	}
+
+	var phone models.PhoneNumber
+	if err := database.DB.Where("phone_number = ?", input.Phone).First(&phone).Error; err != nil {
+		return c.JSON(http.StatusNotFound, echo.Map{"error": "user not found"})
+	}
+
+	var latestCode models.SMSCode
+	if err := database.DB.
+		Where("user_id = ? AND is_used = false AND expired_at > ?", phone.UserID, time.Now()).
+		Order("created_at desc").
+		First(&latestCode).Error; err != nil {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "no valid code found"})
+	}
+
+	if latestCode.Code != input.Code {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "invalid or expired code"})
+	}
+
+	latestCode.IsUsed = true
+	if err := database.DB.Save(&latestCode).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "failed to mark code as used"})
+	}
+
+	tokens, err := service.NewTokens(phone.UserID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "token generation error"})
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{
+		"access_token":  tokens.AccessToken,
 		"refresh_token": tokens.RefreshToken,
 	})
 }
